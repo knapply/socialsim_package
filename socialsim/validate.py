@@ -3,23 +3,28 @@ import numpy as np
 import pandas as pd
 from .load import load_data
 
-VALID_OPTIONS = {'cp4': {'simulation_periods': {"february1-february14", "february8-february21",
-                                                "february15-february28", "february22-february28",
-                                                "march1-march14", "march8-march21", "march15-march28",
-                                                "march22-april4"},
-                         'simulation_windows': {"february1-february14": ['02-01', '02-14'],
-                                                "february8-february21": ['02-08', '02-21'],
-                                                "february15-february28": ['02-15', '02-28'],
-                                                "february22-february28": ['02-22', '02-28'],
-                                                "march1-march14": ['03-01', '03-14'],
-                                                "march8-march21": ['03-08', '03-21'],
-                                                "march15-march28": ['03-15', '03-28'],
-                                                "march22-april4": ['03-22', '04-04']},
-                         'teams': {'pnnl', 'ucf-garibay', 'uiuc', 'usc', 'usf', 'uva'},
+VALID_OPTIONS = {'cp5': {'simulation_periods': {"june30-july27", 
+                                                "july7-august3",
+                                                "july14-august10", 
+                                                "july21-august17",
+                                                "july28-august24", 
+                                                "march15-march28",
+                                                "august4-august31"},
+                         
+                         'simulation_windows': {"june30-july27": ['06-30', '07-27'],
+                                                "july7-august3": ['07-07', '08-03'],
+                                                "july14-august10": ['07-14', '08-10'],
+                                                "july21-august17": ['07-21','08-17'],
+                                                "july28-august24": ['07-28', '08-24'],
+                                                "august4-august31": ['08-04', '08-31']},
+                         
+                         'teams': {'leidos', 'ucf-garibay', 'uiuc', 'usc', 'usf'},
                          'platforms': {'twitter', 'youtube'},
                          'actiontypes': {'tweet', 'retweet', 'quote', 'reply', 'comment', 'video'}
                          }
                  }
+
+
 
 def check_meta(submission_filepath, challenge):
     try:
@@ -34,7 +39,7 @@ def check_meta(submission_filepath, challenge):
 
 
 def check_metadata_object(submission_meta, challenge):
-    teams = ['pnnl', 'ucf-garibay', 'uiuc', 'usc', 'usf', 'uva']
+    teams = ['leidos', 'ucf-garibay', 'uiuc', 'usc', 'usf']
     simulation_periods = VALID_OPTIONS[challenge]['simulation_periods']
     meta_issues, meta_warnings = [], []
     # test required fields are valid
@@ -187,7 +192,7 @@ def check_records(submission_filepath, nodelist, simulation_period, challenge):
     return result, validation_flag
 
 
-def validation_flag(submission_filepath, challenge='cp4', nodelist_filepath=None):
+def validation_flag(submission_filepath, challenge='cp5', nodelist_filepath=None):
     ## check metadata
     meta_status, simulation_period, meta_validation_flag = check_meta(submission_filepath, challenge)
 
@@ -211,7 +216,7 @@ def validation_flag(submission_filepath, challenge='cp4', nodelist_filepath=None
     return validation_flag
 
 
-def validation_report(submission_filepath, challenge='cp4', nodelist_filepath=None):
+def validation_report(submission_filepath, challenge='cp5', nodelist_filepath=None):
 
     print('\n\nValidating ' + str(submission_filepath) + ' ...')
     validation_report = ['Submission: ' + str(submission_filepath)]

@@ -28,7 +28,6 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     This class implements Network specific measurements. It uses iGraph and
     SNAP libraries with Python interfaces. For installation information please
     visit the websites for the two packages.
-
     iGraph-Python at http://igraph.org/python/
     SNAP Python at https://snap.stanford.edu/snappy/
     """
@@ -115,13 +114,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def mean_shortest_path_length(self, node_level=False):
         """
         Measurement: mean_shortest_path_length
-
         Description: Calculate the mean shortest path
-
         Input: Graph
-
         Output:
-
         """
         if SNAP_LOADED:
             if self.gUNsn.Empty():
@@ -154,13 +149,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def number_of_nodes(self, node_level=False):
         """
         Measurement: number_of_nodes
-
         Description: Calculate the number of nodes in the graph
-
         Input: Graph
-
         Output: Int.
-
         """
 
         if not node_level:
@@ -180,13 +171,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def number_of_edges(self, node_level=False):
         """
         Measurement: number_of_edges
-
         Description: Calculate the number of edges in the graph
-
         Input: Graph
-
         Output: Int.
-
         """
 
         if not node_level:
@@ -207,13 +194,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def density(self, node_level=False):
         """
         Measurement: density
-
         Description: Calculate density of graph
-
         Input: Graph
-
         Output: Int.
-
         """
 
 
@@ -235,13 +218,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def assortativity_coefficient(self, node_level=False):
         """
         Measurement: assortativity_coefficient
-
         Description: Calculate the assortativity degree coefficient of the graph
-
         Input: Graph
-
         Output: Float
-
         """
 
         if not node_level:
@@ -261,13 +240,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def number_of_connected_components(self, node_level=False):
         """
         Measurement: number_of_connected_components
-
         Description: Calculate the number of connected components in the graph
-
         Input: Graph
-
         Output: Int.
-
         """
 
         if not node_level:
@@ -304,13 +279,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def average_clustering_coefficient(self, node_level=False):
         """
         Measurement: average_clustering_coefficient
-
         Description: Calculate the average clustering coefficient of the graph
-
         Input: Graph
-
         Output: Float
-
         """
         if SNAP_LOADED:
             return sn.GetClustCf(self.gUNsn)
@@ -334,13 +305,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def max_node_degree(self, node_level=False):
         """
         Measurement: max_node_degree
-
         Description: Determine the max degree of any node in the graph
-
         Input: Graph
-
         Output: Int.
-
         """
 
         if not node_level:
@@ -366,13 +333,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def mean_node_degree(self, node_level=False):
         """
         Measurement: mean_node_degree
-
         Description: Calculate the mean node degree of the graph
-
         Input: Graph
-
         Output: Float
-
         """
 
         if not node_level:
@@ -398,13 +361,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def degree_distribution(self,node_level=False, mode='ALL'):
         """
         Measurement: degree_distribution
-
         Description: Get the distribution of all node degrees in the graph
-
         Input: Graph
-
         Output: DataFrame
-
         """
         
         if not node_level:
@@ -437,13 +396,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def pagerank_distribution(self,node_level=False):
         """
         Measurement: pagerank_distribution
-
         Description: Pagerank scores of all nodes in the graph
-
         Input: Graph, with "weight" attribute on edges
-
         Output: DataFrame
-
         """
 
         if not node_level:
@@ -471,13 +426,9 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def community_modularity(self, node_level=False):
         """
         Measurement: community_modularity
-
         Description: Calculate the community modularity of the graph
-
         Input: Graph
-
         Output: Float
-
         """
         random.seed(37)
 
@@ -507,12 +458,7 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
         if it doesn't exist, uses the user id of the root instead
         if both doesn't exist: NaN
         """
-        tweet_uids = pd.Series(df[user_col].values, index=df[node_col]).to_dict()
 
-        df['parentUserID'] = df[parent_node_col].map(tweet_uids)
-
-        df.loc[(df[root_node_col] != df[node_col]) & (df['parentUserID'].isnull()), 'parentUserID'] = \
-            df[(df[root_node_col] != df[node_col]) & (df['parentUserID'].isnull())][root_node_col].map(tweet_uids)
         
         df = df[df['nodeUserID'] != df['parentUserID']]
         
@@ -572,15 +518,12 @@ class SocialStructureMeasurements(MeasurementsBaseClass):
     def social_media_build_graph(self, df, weight_filter=1, directed=False):
         """
         Description:
-
         Input:
-
         Output:
-
         """
         print('Building directed=',directed,'graph')
         df = self.get_parent_uids(df).dropna(subset=['parentUserID'])
-        
+       
         edgelist = self.get_edgelist(df, weight_filter, directed=directed)
 
         #iGraph graph object construction
