@@ -35,7 +35,7 @@ package_data = {
 
 setup(
     name='socialsim',
-    version='0.3.0',
+    version='0.4.0',
     requirements=package_requirements, 
     packages=package_structure,
     package_data=package_data,
@@ -43,6 +43,6 @@ setup(
     url='',
     long_description='None',
     maintainer='SocialSim Team',
-    maintainer_email='SocialSim.Admin@pnnl.gov',
+    maintainer_email='SocialSimAdmin@leidos.com',
     install_requires=package_requirements
     )

@@ -1,5 +1,4 @@
 import pandas as pd
-
 import pprint
 import re
 import json
@@ -8,11 +7,13 @@ import itertools
 import numpy as np
 import glob
 import ast
-import networkx as nx
-
+import gzip
+#import networkx as nx
 from datetime import datetime
+from dateutil.parser import parse
+import time
 
-from .twitter_cascade_reconstruction import full_reconstruction, get_reply_cascade_root_tweet
+from .twitter_cascade_reconstruction import full_reconstruction, get_reply_cascade_root_tweet, full_reconstruction_retweet_reconstruction
 
 URL_REGEX = r"""(?i)\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\-]+[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\b/?(?!@)))"""
 
@@ -32,6 +33,7 @@ def get_urls(x):
 
 
 def get_twitter_api_url_rep(x, name_suffix):
+    #pulling either unwound or expanded_url 
     if 'unwound' in x.keys():
         if x['unwound']['url' + name_suffix] != "":
             url = x['unwound']['url' + name_suffix]
@@ -49,30 +51,41 @@ def get_twitter_api_url_rep(x, name_suffix):
 
 def get_twitter_urls(df, name_suffix):
     twitter_urls = []
+    #turning dataframe to dict? in records form? why
     df_json = df.to_dict('records')
+    #for line in json
     for j_json in df_json:
         row_urls = []
         if "retweeted_status" in j_json.keys():
             try:
+                #if retweeted, get the URLs and put into list called api_urls
                 api_urls = [get_twitter_api_url_rep(x, name_suffix) for x in
                             j_json["retweeted_status"]['entities']['urls'] if x != '']
             except:
+                #else return empty list 
                 api_urls = []
             try:
+                #try to get media urls
                 media_urls = [get_twitter_api_url_rep(x, name_suffix) for x in
                               j_json["retweeted_status"]['entities']['media'] if x != '']
             except:
+                #else return empty list
                 media_urls = []
+                
+            #add api_urls and media_urls to row_urls list 
             row_urls.extend(list(set(api_urls + media_urls)))
             # twitter_urls.append(urls)
         if "extension" in j_json.keys():
             try:
+                #if there is an extension key, try and get the api urls 
                 api_urls = [get_twitter_api_url_rep(x, name_suffix) for x in j_json["extension"]['entities']['urls'] if
                             x != '']
+                #if resolved urls in the dict pull resolved URLs and get twitter URLs and add to set 
                 if 'resolved_urls' in j_json['extension'].keys():
                     resolved_urls = j_json['extension']['resolved_urls']
                     internal_urls = [x for x in api_urls if 'twitter.com' in x]
                     urls = list(set(resolved_urls + internal_urls))
+                #if ss resolved urls, pull them out, check for twitter urls and add to set 
                 elif 'socialsim_resolved_urls' in j_json['extension'].keys():
                     resolved_urls = j_json['extension']['socialsim_resolved_urls']
                     internal_urls = [x for x in api_urls if 'twitter.com' in x]
@@ -83,6 +96,7 @@ def get_twitter_urls(df, name_suffix):
                 urls = []
             row_urls.extend(urls)
             # twitter_urls.append(urls)
+        #if entities in the line and the url is bigger than zero 
         if "entities" in j_json.keys():
             try:
                 if len(j_json['entities']['urls']) > 0:
@@ -106,6 +120,7 @@ def get_twitter_urls(df, name_suffix):
 
 
 def get_youtube_urls(df, text_suffix):
+    #pull youtube_urls
     youtube_urls = []
     for i, row in enumerate(df.iterrows()):
         rowdata = row[1]
@@ -128,6 +143,7 @@ def get_youtube_urls(df, text_suffix):
 
 
 def get_domain(url):
+    #pull domain
     domains_shortened = {'redd.it': 'reddit.com', 'youtu.be': 'youtube.com',
                          'y2u.be': 'youtube.com', 't.co': 'twitter.com'}
     url = url.lower()
@@ -143,6 +159,7 @@ def get_domain(url):
 
 
 def get_domains(urls):
+    #seems repetitive from function above
     domains = []
     for url in urls:
         domain = get_domain(url)
@@ -179,6 +196,7 @@ def has_link_external(domains, platform):
 
 
 def parse_url(url):
+    #still cleaning up urls
     """
     Parse URL and resolve to base URL if includes a reference to a specific time in video, element on page,
     or if is a redirect, resolve to the link users would be redirected to on click.
@@ -215,20 +233,40 @@ def parse_url(url):
     return url
 
 
+def read_json(fn):
+    """
+    Reads json from filename into a list of dicts
+    :param fn: string path to json-lines file.  Supports gzip compressed if ends with .gz
+    """
+    json_data = []
+    if fn.endswith('.gz'):
+        with gzip.open(fn, 'rb') as f:
+            for line in f:
+                line = line.decode('utf-8')
+                yield (json.loads(line))
+    elif fn.endswith('.json'):
+        with open(fn, 'rb') as f:
+            for line in f:
+                yield (json.loads(line))
+    
+    
 def load_json(fn):
+    """
+    Loads json into dicts from json-lines files.  Supports:
+        - plain json-lines (*.json)
+        - gzip json-lines (*.json.gz)
+        - list of either of the above
+    :param fn: List of or standalone strings of json-lines path.
+    """
     json_data = []
 
     if type(fn) == str:
-        with open(fn, 'rb') as f:
-            for line in f:
-                json_data.append(json.loads(line))
+        json_data = read_json(fn)
     else:
         for fn0 in fn:
-            with open(fn0, 'rb') as f:
-                for line in f:
-                    json_data.append(json.loads(line))
-
-    return (json_data)
+            json_data.extend(read_json(fn0))
+    
+    return json_data
 
 
 def convert_timestamps(dataset, timestamp_field="nodeTime"):
@@ -250,6 +288,8 @@ def convert_timestamps(dataset, timestamp_field="nodeTime"):
 
 
 def get_info_id_from_text(text_list=[], keywords=[]):
+    #not sure what this one does
+    
     word_list = r"\b" + keywords[0] + r"\b"
     for w in keywords[1:]:
         word_list += "|" + r"\b" + w + r"\b"
@@ -292,7 +332,14 @@ def get_info_id_from_fields(row, fields=['entities.hashtags.text'], casefold_inf
                 info_ids.append(val)
 
     if casefold_info_ids:
-        info_ids = [x.lower() for x in info_ids]
+        #frame_list = ['crisis/lack_essentials', 'maduro/dictator', 'violence', 'maduro/narco']
+        frame_list = ['controversies/pakistan/students', 'leadership/sharif', 'leadership/bajwa', 'controversies/china/uighur', 'controversies/china/border', 'benefits/development/roads', 'controversies/pakistan/baloch', 'benefits/jobs', 'opposition/propaganda', 'benefits/development/energy', 'controversies/pakistan/bajwa']
+        if bool(set(info_ids).intersection(frame_list)):
+            info_ids = [x.lower() for x in info_ids]
+        else:
+            info_ids = ["other"]
+        
+    #print(list(set(info_ids)))
 
     return list(set(info_ids))
 
@@ -310,8 +357,9 @@ def user_alignment(alignment_file_path,
         with open(fn, 'r') as f:
             for line in f:
                 alignment_data.append(json.loads(line))
-
+        
     df = pd.DataFrame(alignment_data)
+    #only include scores above .9
     df = df[df['score'] > thresh]
 
     platforms = [c for c in df.columns if c != 'score']
@@ -346,7 +394,6 @@ def user_alignment(alignment_file_path,
             username_map[comp[i + 1]] = comp[0]
 
     return (username_map)
-
 
 def extract_youtube_data(fn='youtube_data.json',
                          info_id_fields=None,
@@ -516,7 +563,11 @@ def extract_youtube_data(fn='youtube_data.json',
             count += 1
             print('Iteration ', count, (merged['propagated_informationIDs'] != orig_info_ids.loc[merged.index]).sum(),
                   ' nodes to update')
-    
+
+    to_user = youtube_data.set_index('nodeID')['nodeUserID'].to_dict()
+    youtube_data['rootUserID'] = youtube_data['rootID'].apply(lambda x: to_user[x] if x in to_user else "?")
+    youtube_data['parentUserID'] = youtube_data['parentID'].apply(lambda x: to_user[x] if x in to_user else "?")
+
     if get_info_ids:
         # remove items without informationIDs
         youtube_data = youtube_data[youtube_data['informationIDs'].str.len() > 0]
@@ -811,60 +862,78 @@ def extract_reddit_data(fn='reddit_data.json',
     return data
 
 
+from dateutil.parser import parse
+import time
+
 def extract_twitter_data(fn='twitter_data.json',
                          info_id_fields=None,
                          keywords=[],
                          anonymized=False,
                          username_map={},
                          additional_fields=[],
-                         propagate_info_ids=False):
+                         propagate_info_ids=False,
+                         retwt_reconstruct_fn=None):
     """
     Extracts fields from Twitter JSON data
     :param fn: A filename or list of filenames which contain the JSON Twitter data
     :param info_id_fields: A list of field paths from which to extract the information IDs. If None, don't extract any.
     :param keywords:
     :params anonymized: Whether the data is in raw Twitter API format (False) or if it is in the processed and anonymized SocialSim data format (True).  The anonymized format has several modifications to field names.
+    :params retwt_reconstruct_fn:  The json/json.gz filename for the retweet reconstruction release to use for parentId reconstruction of retweets.
     """
 
     platform = 'twitter'
     json_data = load_json(fn)
     data = pd.DataFrame(json_data)
 
+    data.loc[:,'created_at_timestamp'] = data['created_at'].apply(lambda x: parse(x))
+
     get_info_ids = False
+    #if info id fields is populated or if keywords are > 0
     if not info_id_fields is None or len(keywords) > 0:
+        #change the get info ids var into True
         get_info_ids = True
 
     if anonymized:
+        #if anonymized, add _h to the end of the name field and text field
         name_suffix = "_h"
         text_suffix = "_m"
     else:
+        #else the name and text fields are empty strings
         name_suffix = ""
         text_suffix = ""
 
-    data = data.sort_values("timestamp_ms").reset_index(drop=True)
+    #sort data earliest to latest     
+   # data = data.sort_values("timestamp_ms").reset_index(drop=True)
+    data = data.sort_values("created_at_timestamp").reset_index(drop=True)
+    #none of this is added at this point
     output_columns = ['nodeID', 'nodeUserID', 'parentID', 'rootID', 'actionType', 'nodeTime',
-                      'partialParentID', 'platform', 'has_URL', 'domain_linked', 'links_to_external', 'urls_linked'] + additional_fields
+                      'partialParentID', 'platform', 'has_URL', 'domain_linked', 'links_to_external', 'urls_linked', 'subType'] + additional_fields
+    #if get_info ids is true, add a column called information IDs
     if get_info_ids:
         output_columns.append('informationIDs')
 
-    #print('Extracting fields...')
+    print('Extracting fields...')
     tweets = data
-    #print("Just loaded",len(tweets), 883)
 
     # extract URLS then add: has_URL, links_to_external, domain_linked
+    #going back in to pull URLs and add columns to df
     urls_in_text = get_twitter_urls(tweets, name_suffix)
-    tweets.loc[:, 'urls_linked'] = [[parse_url(y) for y in x] for x in urls_in_text]
+
+    tweets.loc[:, 'urls_linked'] = pd.Series([[parse_url(y) for y in x] for x in urls_in_text])
     tweets.loc[:, 'has_URL'] = [int(len(x) > 0) for x in tweets['urls_linked']]
-    tweets.loc[:, 'domain_linked'] = [get_domains(x) for x in tweets['urls_linked']]
+    tweets.loc[:, 'domain_linked'] = pd.Series([get_domains(x) for x in tweets['urls_linked']])
     tweets.loc[:, 'links_to_external'] = [has_link_external(domains, platform) for domains in tweets['domain_linked']]
     
-
+    #pull out the full text or return empty string
     def get_full_text_if_exists(x):
         try:
             return x['full_text'+text_suffix]
         except:
             return ''
 
+    
+    #similar to above
     def get_extended_full_text_if_exists(x, suffix):
         if not pd.isna(x):
             if "extended_tweet" in x.keys():
@@ -875,6 +944,7 @@ def extract_twitter_data(fn='twitter_data.json',
         else:
             return ""
 
+    #get as much text as you can
     def get_as_full_text_as_possible(text, extendedtweet):
         extended_text = get_full_text_if_exists(extendedtweet)
         if len(extended_text) > len(text):
@@ -882,115 +952,181 @@ def extract_twitter_data(fn='twitter_data.json',
         else:
             return text
 
+    #if extended tweet, add a text column 
     if 'extended_tweet' in tweets.columns:
 
         tweets.loc[:, 'text'] = [get_as_full_text_as_possible(text, extendedtweet) for text, extendedtweet in
                                  zip(tweets['text' + text_suffix], tweets['extended_tweet'])]
     else:
         tweets.loc[:, 'text'] = tweets['text' + text_suffix]
-
+    
+    #if there are keywords, add informationIDs column with text 
     if len(keywords) > 0:
         tweets.loc[:, 'informationIDs'] = tweets['text' + text_suffix].apply(
             lambda x: get_info_id_from_text([x], keywords))
+    #if info ids isn't empty, get info ids from fields (look at this one)
     elif info_id_fields is not None:
         tweets.loc[:, 'informationIDs'] = pd.Series(
             [get_info_id_from_fields(t, info_id_fields) for i, t in tweets.iterrows()])
         tweets.loc[:, 'n_info_ids'] = tweets['informationIDs'].apply(len)
+        #sort the indo_ids 
         tweets = tweets.sort_values('n_info_ids', ascending=False).reset_index(drop=True)
     
+    #drop duplicate tweets based on "id_str"
     tweets = tweets.drop_duplicates('id_str' + name_suffix)
 
+    #rename column for id_string to nodeID and timestamp column to nodeTime
     tweets.rename(columns={'id_str' + name_suffix: 'nodeID',
-                           'timestamp_ms': 'nodeTime'}, inplace=True)
-    #print("Added info ids")
+                           'created_at_timestamp': 'nodeTime'}, inplace=True)
+
+    #add the platform column, nodeTime column (which takes nodetime and converts into pd.datetime and then to stringtime format)
     tweets.loc[:, 'platform'] = platform
     tweets.loc[:, 'nodeTime'] = pd.to_datetime(tweets['nodeTime'], unit='ms')
     tweets.loc[:, 'nodeTime'] = tweets['nodeTime'].apply(lambda x: datetime.strftime(x, '%Y-%m-%dT%H:%M:%SZ'))
 
+    #add a column for nodeUserID which is the user variable and then you add the id_str to name_suffix, so either _h to the end or nothing
     tweets.loc[:, 'nodeUserID'] = tweets['user'].apply(lambda x: x['id_str' + name_suffix])
 
-    tweets.loc[:, 'is_reply'] = (tweets['in_reply_to_status_id_str' + name_suffix] != '') & (
-        ~tweets['in_reply_to_status_id_str' + name_suffix].isna())
-
-    if 'retweeted_status.in_reply_to_status_id_str' + name_suffix not in tweets:
-        tweets.loc[:, 'retweeted_status.in_reply_to_status_id_str' + name_suffix] = ''
-    if 'quoted_status.in_reply_to_status_id_str' + name_suffix not in tweets:
-        tweets.loc[:, 'quoted_status.in_reply_to_status_id_str' + name_suffix] = ''
-    if 'quoted_status.is_quote_status' not in tweets:
-        tweets.loc[:, 'quoted_status.is_quote_status'] = False
+    #if quoted status isn't in tweets at all, add the column but make it equal to none for future logic
     if 'quoted_status' not in tweets:
         tweets.loc[:, 'quoted_status'] = None
+    #if retweeted status isn't in tweets at all, add the column but make it equal to none for future logic
+    if 'retweeted_status' not in tweets:
+        tweets.loc[:, 'retweeted_status'] = None
 
-    # keep track of specific types of reply chains (e.g. retweet of reply, retweet of quote of reply) because the parents and roots will be assigned differently
-    tweets.loc[:, 'is_retweet_of_reply'] = (~tweets[
-        'retweeted_status.in_reply_to_status_id_str' + name_suffix].isna()) & (~(
-                tweets['retweeted_status.in_reply_to_status_id_str' + name_suffix] == ''))
-    tweets.loc[:, 'is_retweet_of_quote'] = (~tweets['retweeted_status'].isna()) & (~tweets['quoted_status'].isna()) & (
-                tweets['quoted_status.in_reply_to_status_id_str' + name_suffix] == '')
-    tweets.loc[:, 'is_retweet_of_quote_of_reply'] = (~tweets['retweeted_status'].isna()) & (
-        ~tweets['quoted_status'].isna()) & (~(tweets['quoted_status.in_reply_to_status_id_str' + name_suffix] == ''))
-    tweets.loc[:, 'is_retweet'] = (~tweets['retweeted_status'].isna()) & (~tweets['is_retweet_of_reply']) & (
+    #flatten the fields from subobjects into dataframe 
+    tweets.loc[:, 'retweeted_status_in_reply_to_status_id_str'] = tweets["retweeted_status"].apply(lambda x: x["in_reply_to_status_id_str" + name_suffix] if pd.notnull(x) else x)
+    tweets.loc[:, 'quoted_status_in_reply_to_status_id_str'] = tweets["quoted_status"].apply(lambda x: x["in_reply_to_status_id_str" + name_suffix] if pd.notnull(x) else x)
+    tweets.loc[:, 'quoted_status_quoted_status_id_str'] = tweets["quoted_status"].apply(lambda x: x["quoted_status_id_str" + name_suffix] if pd.notnull(x) and ("quoted_status_id_str" + name_suffix) in x else None)
+    tweets.loc[:, 'quoted_status_is_quote_status'] = tweets["quoted_status"].apply(lambda x: x["is_quote_status"] if pd.notnull(x) else x)
+    tweets.loc[:, 'retweeted_status_id_str'] = tweets["retweeted_status"].apply(lambda x: x["id_str" + name_suffix] if pd.notnull(x) else x)
+    tweets.loc[:, 'quoted_status_id_str'] = tweets["quoted_status"].apply(lambda x: x["id_str" + name_suffix] if pd.notnull(x) else x)
+    # keep reply parent reference for root reply reconstruction
+    tweets.loc[:, 'reply_parent'] = tweets['in_reply_to_status_id_str' + name_suffix]
+    tweets.loc[tweets['reply_parent'] == '','reply_parent'] = tweets['nodeID']
+    ########### done ##########
+    # drop large extraneous columns
+    tweets.loc[:, 'retweeted_status_na'] = tweets['retweeted_status'].isna()
+    tweets.loc[:, 'quoted_status_na'] = tweets['quoted_status'].isna()
+    tweets.drop(columns=['entities','place','retweeted_status', 'quoted_status'], inplace=True)
+
+    # retweet and quote and quote.reply (ignore retweet.reply for (retweet.quote and retweet.reply) case)
+    tweets.loc[:, 'is_retweet_of_quote_of_reply'] = (~tweets['retweeted_status_na']) & (
+       ~tweets['quoted_status_na']) & (tweets['quoted_status_in_reply_to_status_id_str'] != '')
+
+    # retweet and quote and not quote.reply (includes retweet.quote.quote and retweet.quote)
+    tweets.loc[:, 'is_retweet_of_quote'] = (~tweets['retweeted_status_na']) & (~tweets['quoted_status_na']) & (
+                tweets['quoted_status_in_reply_to_status_id_str'] == '')
+
+    # retweet and (not quote) and retweet.reply
+    tweets.loc[:, 'is_retweet_of_reply'] = (~tweets['retweeted_status_na']) & (tweets['quoted_status_na']) & (
+        tweets['retweeted_status_in_reply_to_status_id_str'] != '')
+
+    # retweet and (not quote) and (not retweet.reply)
+    tweets.loc[:, 'is_retweet'] = (~tweets['retweeted_status_na']) & (~tweets['is_retweet_of_reply']) & (
         ~tweets['is_retweet_of_quote']) & (~tweets['is_retweet_of_quote_of_reply'])
 
-    tweets.loc[:, 'is_quote_of_reply'] = (~tweets['quoted_status.in_reply_to_status_id_str' + name_suffix].isna()) & (
-        ~(tweets['quoted_status.in_reply_to_status_id_str' + name_suffix] == '')) & (tweets['retweeted_status'].isna())
-    tweets.loc[:, 'is_quote_of_quote'] = (~tweets['quoted_status.is_quote_status'].isna()) & (
-                tweets['quoted_status.is_quote_status'] == True) & (tweets['retweeted_status'].isna())
-    tweets.loc[:, 'is_quote'] = (~tweets['quoted_status'].isna()) & (~tweets['is_quote_of_reply']) & (
-        ~tweets['is_quote_of_quote']) & (tweets['retweeted_status'].isna()) & (~tweets['is_reply'])
+    # (not retweet) and quote and quote.quote (ignore quote.reply and reply)
+    tweets.loc[:, 'is_quote_of_quote'] = (tweets['retweeted_status_na']) & (tweets['quoted_status_quoted_status_id_str'] != '') & (
+        ~tweets['quoted_status_quoted_status_id_str'].isna())
 
-    tweets.loc[:, 'is_orig'] = (~tweets['is_reply']) & (~tweets['is_retweet']) & (~tweets['is_quote']) & (
-        ~tweets['is_quote_of_reply']) & (~tweets['is_quote_of_quote']) & (~tweets['is_retweet_of_reply']) & (
-                                   ~tweets['is_retweet_of_quote_of_reply']) & (~tweets['is_retweet_of_quote'])
+    # (not retweet) and quote and quote.reply and (not quote.quote)
+    tweets.loc[:, 'is_quote_of_reply'] = (~tweets['quoted_status_na']) & (tweets['quoted_status_in_reply_to_status_id_str'] != '') & (
+        tweets['quoted_status_quoted_status_id_str'].isna()) & (tweets['retweeted_status_na'])
 
+    # (not retweet) and quote and (not quote.reply) and (not quote.quote)
+    tweets.loc[:, 'is_quote'] = (~tweets['quoted_status_na']) & (~tweets['is_quote_of_reply']) & (
+        ~tweets['is_quote_of_quote']) & (tweets['retweeted_status_na'])
+
+    # (not retweet) and (not quote) and reply
+    tweets.loc[:, 'is_reply'] = (tweets['in_reply_to_status_id_str' + name_suffix] != '') &  (
+        tweets['quoted_status_na']) & (tweets['retweeted_status_na'])
+
+    # (not retweet) and (not quote) and (not reply)
+    # or is not any of the previous 8 types
+    tweets.loc[:, 'is_orig'] = (tweets['retweeted_status_na']) & (tweets['quoted_status_na']) & (
+        ~tweets['is_reply'])
+    
+    #these are all the possible types of tweets 
     tweet_types = ['is_reply', 'is_retweet', 'is_quote', 'is_orig', 'is_retweet_of_reply', 'is_retweet_of_quote',
                    'is_retweet_of_quote_of_reply', 'is_quote_of_reply', 'is_quote_of_quote']
     to_concat = []
 
+    #if there is a val for in_reply_to_status_id_str
+    #creating new df for replies
     replies = tweets[tweets['is_reply']].copy()
     if len(replies) > 0:
+        #if there are replies
         # for replies we know immediate parent but not root
+        #create col for actionType aka reply
         replies.loc[:, 'actionType'] = 'reply'
+        #create col for parentID based on in_reply_to_status_id_str' + name_suffix. In example data, val would be none
         replies.loc[:, 'parentID'] = tweets['in_reply_to_status_id_str' + name_suffix]
+        #create col for rootID which would be a question mark
         replies.loc[:, 'rootID'] = '?'
+        #create col for partialParentId which is same as parentID
         replies.loc[:, 'partialParentID'] = tweets['in_reply_to_status_id_str' + name_suffix]
-
+        #adding subtypes
+        replies.loc[:, 'subType'] = 'is_reply'
+        #add replies df to list called concat
         to_concat.append(replies)
         
+        
+###### These are all characterized as retweets ############
+    
+    #new df for retweets where it is a retweet, not a quote
     retweets = tweets[(tweets['is_retweet']) & (~tweets['is_quote'])].copy()
+    #if there are retweets
     if len(retweets) > 0:
         # for retweets we know the root but not the immediate parent
+        #add a col for actiontype "retweet"
         retweets.loc[:, 'actionType'] = 'retweet'
-        retweets.loc[:, 'rootID'] = retweets['retweeted_status'].apply(lambda x: x['id_str' + name_suffix])
+        #add col for rootID, which is just the id_str from the retweeted_status
+        retweets.loc[:, 'rootID'] = retweets['retweeted_status_id_str']
+        #reweet col for parentID is a question mark
         retweets.loc[:, 'parentID'] = '?'
-        retweets.loc[:, 'partialParentID'] = retweets['retweeted_status'].apply(lambda x: x['id_str' + name_suffix])
-
+        #retweet col for partial is the same as rootID
+        retweets.loc[:, 'partialParentID'] = retweets['retweeted_status_id_str']
+        #adding subtype
+        retweets.loc[:, 'subType'] = 'is_retweet and not is_quote'
+        #append retweets df to list
         to_concat.append(retweets)
     
+    #new df for retweets of replies
     retweets_of_replies = tweets[tweets['is_retweet_of_reply']].copy()
+    #if there are retweets of replies
     if len(retweets_of_replies) > 0:
         # for retweets of replies the "root" is actually the reply not the ultimate root
         # the parent of a retweet of a reply will be the reply or any retweet of the reply
         # the root can be retraced by following parents up the tree
+        #parent ID gets a question mark, the parent is the initial reply? or the retweet of the reply?
         retweets_of_replies.loc[:, 'parentID'] = '?'
+        #retweet of replies col for rootID, above says it is the reply
         retweets_of_replies.loc[:, 'rootID'] = '?'
-        retweets_of_replies.loc[:, 'partialParentID'] = retweets_of_replies['retweeted_status'].apply(
-            lambda x: x['in_reply_to_status_id_str' + name_suffix])
+        # set the reply-parent to the seed for the reply parent reconstruction.  This means that any reply to this tweet will jump to this parent
+        retweets_of_replies.loc[:, 'reply_parent'] = retweets_of_replies['retweeted_status_in_reply_to_status_id_str']
+        #partial parent id col is in_reply_to_status_id_str, which in example data is ""
+        retweets_of_replies.loc[:, 'partialParentID'] = retweets_of_replies['retweeted_status_in_reply_to_status_id_str']
         retweets_of_replies.loc[:, 'actionType'] = 'retweet'
+        #adding subtype
+        retweets_of_replies.loc[:, 'subType'] = 'retweet of reply'
 
         to_concat.append(retweets_of_replies)
 
+    #new df for retweets of quotes 
     retweets_of_quotes = tweets[tweets['is_retweet_of_quote']].copy()
     if len(retweets_of_quotes) > 0:
         # for retweets of quotes we know the root (from the quoted status) but not the parent
         # the parent will be either the quote or any retweets of it
+        # parentID gets question mark, could be quote or any retweets?
         retweets_of_quotes.loc[:, 'parentID'] = '?'
-        retweets_of_quotes.loc[:, 'rootID'] = retweets_of_quotes['quoted_status'].apply(
-            lambda x: x['id_str' + name_suffix])
-        retweets_of_quotes.loc[:, 'partialParentID'] = retweets_of_quotes['retweeted_status'].apply(
-            lambda x: x['id_str' + name_suffix])
+        #rootID is the ID str within the quoted status
+        retweets_of_quotes.loc[:, 'rootID'] = retweets_of_quotes['quoted_status_id_str']
+        #partialparent col is the id str from the retweeted_status key
+        retweets_of_quotes.loc[:, 'partialParentID'] = retweets_of_quotes['retweeted_status_id_str']
         retweets_of_quotes.loc[:, 'actionType'] = 'retweet'
-
+        #adding subtype
+        retweets_of_quotes.loc[:, 'subType'] = 'retweet of quote'
         to_concat.append(retweets_of_quotes)
         
     retweets_of_quotes_of_replies = tweets[tweets['is_retweet_of_quote_of_reply']].copy()
@@ -1000,32 +1136,48 @@ def extract_twitter_data(fn='twitter_data.json',
         # we can find the root by tracking parents up the tree
         retweets_of_quotes_of_replies.loc[:, 'parentID'] = '?'
         retweets_of_quotes_of_replies.loc[:, 'rootID'] = '?'
-        retweets_of_quotes_of_replies.loc[:, 'partialParentID'] = retweets_of_quotes_of_replies['quoted_status'].apply(
-            lambda x: x['id_str' + name_suffix])
+        # set the reply-parent to the seed for the reply parent reconstruction.  This means that any reply to this tweet will jump to this parent
+        retweets_of_quotes_of_replies.loc[:, 'reply_parent'] = retweets_of_quotes_of_replies['quoted_status_in_reply_to_status_id_str']
+        retweets_of_quotes_of_replies.loc[:, 'partialParentID'] = retweets_of_quotes_of_replies['quoted_status_id_str']
         retweets_of_quotes_of_replies.loc[:, 'actionType'] = 'retweet'
+        #adding subtype
+        retweets_of_quotes_of_replies.loc[:, 'subType'] = 'retweet of quote of reply'
 
         to_concat.append(retweets_of_quotes_of_replies)
+
+################## No longer retweets #######################
         
+    #new df for quotes
     quotes = tweets[tweets['is_quote']].copy()
     if len(quotes) > 0:
         # for quotes we know the root but not the parent
+        #rootID is the idstr for quoted_status, ex: UzZdzo9s8DXlboztmEyUKg
         quotes.loc[:, 'actionType'] = 'quote'
-        quotes.loc[:, 'rootID'] = quotes['quoted_status'].apply(lambda x: x['id_str' + name_suffix])
+        quotes.loc[:, 'rootID'] = quotes['quoted_status_id_str']
+        #parent_id unknown
         quotes.loc[:, 'parentID'] = '?'
-        quotes.loc[:, 'partialParentID'] = quotes['quoted_status'].apply(lambda x: x['id_str' + name_suffix])
+        #partialParentID is same as above, ex: UzZdzo9s8DXlboztmEyUKg
+        quotes.loc[:, 'partialParentID'] = quotes['quoted_status_id_str']
+        #adding subtype
+        quotes.loc[:, 'subType'] = 'quote'
 
         to_concat.append(quotes)
         
+    #new df for quotes of replies
     quotes_of_replies = tweets[tweets['is_quote_of_reply']].copy()
     if len(quotes_of_replies) > 0:
         # for quotes of replies we don't know the root or the parent
         # the parent will be the reply or any retweets of the reply
         # the root can be tracked back using the parents in the tree
+        #apparently don't know the root or the parent, parent is teh reply or any retweets of reply
         quotes_of_replies.loc[:, 'parentID'] = '?'
         quotes_of_replies.loc[:, 'rootID'] = '?'
-        quotes_of_replies.loc[:, 'partialParentID'] = quotes_of_replies['quoted_status'].apply(
-            lambda x: x['in_reply_to_status_id_str' + name_suffix])
+        # set the reply-parent to the seed for the reply parent reconstruction.  This means that any reply to this tweet will jump to this parent
+        quotes_of_replies.loc[:, 'reply_parent'] = quotes_of_replies['quoted_status_in_reply_to_status_id_str']
+        quotes_of_replies.loc[:, 'partialParentID'] = quotes_of_replies['quoted_status_id_str']
         quotes_of_replies.loc[:, 'actionType'] = 'quote'
+        #adding subtype
+        quotes_of_replies.loc[:, 'subType'] = 'quote of reply'
 
         to_concat.append(quotes_of_replies)
         
@@ -1034,35 +1186,72 @@ def extract_twitter_data(fn='twitter_data.json',
         # for quotes of quotes we don't know the parent or the root
         # the parent will be the first quote or any retweets of it
         # the root can be traced back through the parent tree
+        #don't know the parent ID or root ID. Parent is first quote
         quotes_of_quotes.loc[:, 'parentID'] = '?'
-        quotes_of_quotes.loc[:, 'rootID'] = '?'
-        quotes_of_quotes.loc[:, 'partialParentID'] = quotes_of_quotes['quoted_status'].apply(
-            lambda x: x['quoted_status_id_str'])
+        #root is traced back through parents
+        quotes_of_quotes.loc[:, 'rootID'] = quotes_of_quotes['quoted_status_quoted_status_id_str']
+        #str_id for quoted status id str, ex: -pSxYr_D2WgAMWpwJZLHEg
+        quotes_of_quotes.loc[:, 'partialParentID'] = quotes_of_quotes['quoted_status_id_str']
         quotes_of_quotes.loc[:, 'actionType'] = 'quote'
+        #adding subtype
+        quotes_of_quotes.loc[:, 'subType'] = 'quote of quote'
 
         to_concat.append(quotes_of_quotes)
         
+    #new df for original tweets
     orig_tweets = tweets[tweets['is_orig']].copy()
     if len(orig_tweets) > 0:
         # for original tweets assign parent and root to be itself
         orig_tweets.loc[:, 'actionType'] = 'tweet'
+        #parentID, root, and partial are all nodeID
         orig_tweets.loc[:, 'parentID'] = orig_tweets['nodeID']
         orig_tweets.loc[:, 'rootID'] = orig_tweets['nodeID']
         orig_tweets.loc[:, 'partialParentID'] = orig_tweets['nodeID']
+        #adding subtype
+        orig_tweets.loc[:, 'subType'] = 'original tweet'
         to_concat.append(orig_tweets)
         
+    #add this list of DFs to the original df for tweets
     tweets = pd.concat(to_concat, ignore_index=True, sort=False)
+    #convert the nodeID to string
     tweets['nodeID'] = tweets['nodeID'].astype(str)
-    tweets = tweets[output_columns]
+    #output the columns that were specified earlier, adding reply_parent for reply reconstruction
+    tweets = tweets[output_columns+['reply_parent']]
+    #sort the output by time
     tweets = tweets.sort_values("nodeTime").reset_index(drop=True)
 
+    
     #print('Reconstructing cascades...')
-    tweets = full_reconstruction(tweets)
+    #how this works:
+        #pull in all data where the actiontype is reply
+        #create a new df by pulling out the nodeID, nodeUserID, and nodeTime cols from the data
+        #create new columns for that df as 'partialParentID','rootUserID','rootTime'
+        #merging the two df's on partialParentID, inclusive
+        #store orig tweets in a different df and define the cols to include
+        #if the length of the followers doesn't equal 0 (ie. if followers is included):
+            # - run the ParentIDApproximation function and pull the "approximate" parent IDs
+            # - add a new column for parent ID that gts mapped to the node ID
+        #else:
+            # - don't run the parent id construction
+            # - replace the "?" from parentID, with the partialParentID which varies but is usually the id_str_h value associated with the one level up var in the dict 
+
+    # For CP5: Use Netanomics Retweet Reconstruction for ParentIds
+    if retwt_reconstruct_fn != None:
+        rt_data = load_json(retwt_reconstruct_fn)
+        rtdf = pd.DataFrame(rt_data)
+
+        tweets = full_reconstruction_retweet_reconstruction(tweets, rtdf)
+    else:
+        tweets = full_reconstruction(tweets)
+
+    # With reconstruction complete, drop the reply_parent
+    tweets.drop(columns=['reply_parent'], inplace=True)
     # initialize info ID column with empty lists
     tweets['threadInfoIDs'] = [[] for i in range(len(tweets))]
 
     tweets = tweets.reset_index(drop=True)
-
+    
+    
     if propagate_info_ids and get_info_ids:
         tweets["propagated_informationIDs"] = tweets["informationIDs"]
         print('Adding information IDs to children...')
@@ -1083,6 +1272,11 @@ def extract_twitter_data(fn='twitter_data.json',
             print('Iteration ', count, (merged['propagated_informationIDs'] != orig_info_ids.loc[merged.index]).sum(),
                   ' nodes to update')
     
+    #adding parentUserID and rootUserID for CP5 
+    tweet2user = tweets.set_index('nodeID')['nodeUserID'].to_dict()
+    tweets['rootUserID'] = tweets['rootID'].apply(lambda x: tweet2user[x] if x in tweet2user else "?")
+    tweets['parentUserID'] = tweets['parentID'].apply(lambda x: tweet2user[x] if x in tweet2user else "?")
+
     if get_info_ids:
         # remove tweets with no informationID
         tweets = tweets[tweets['informationIDs'].str.len() > 0]
@@ -1101,6 +1295,8 @@ def extract_twitter_data(fn='twitter_data.json',
     if len(username_map) > 0:
         tweets['nodeUserID'] = tweets['nodeUserID'].replace(username_map)
 
+    #tweets.drop_duplicates(subset=['nodeID', 'subType'], inplace=True, keep="last")
+    
     print('Done!')
     return tweets
 
@@ -1241,3 +1437,6 @@ def extract_github_data(fn='github_data.json',
     print('Done!')
     events['nodeUserID'] = events['nodeUserID'].replace(username_map)
     return events
+
+
+####

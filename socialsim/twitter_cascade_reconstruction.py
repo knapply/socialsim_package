@@ -177,6 +177,27 @@ def get_reply_cascade_root_tweet(df, parent_node_col="parentID", node_col="nodeI
     else:
         return df
 
+def full_reconstruction_retweet_reconstruction(data, retweet_reconstruction, followers=defaultdict(lambda: set([]))):
+    """
+    Perform the Retweet Parent Reconstruction using the Netanomics retweet reconstruction mapping
+    All node->parent relationships are set, then run through the basic reconstruction.
+    :param data: dataframe of extracted ground truth without parent reconstruction
+    :param retweet_reconstruction:  dataframe of tweet id, parent id from reconstruction mapping
+    """
+
+    # Set the reconstruction parent id where the nodeids match
+    rtdf_work = retweet_reconstruction.drop(['tweeter_followers', 'tweeter_utc_offset', 'tweet_postdate', 'source_tweet_id_h'], axis=1)
+    rtdf_work.rename(columns = {'tweet_id_h':'nodeID', 'retweeted_from_tweet_id_h':'parentID_rt'}, inplace = True)
+    
+    data = data.join(rtdf_work.set_index('nodeID'), on="nodeID", how='left')
+    # For where we have the retweet parentid, make it the parentid.
+    data.loc[data['parentID_rt'].notna(), 'parentID'] = data.loc[data['parentID_rt'].notna(), 'parentID_rt'].copy()
+    data = data.drop(['parentID_rt'],axis=1)
+
+    data = full_reconstruction(data)
+
+    return (data)
+
 def full_reconstruction(data,followers=defaultdict(lambda: set([]))):
     
     #store replies for later
@@ -193,14 +214,12 @@ def full_reconstruction(data,followers=defaultdict(lambda: set([]))):
     cols = ['nodeID','nodeUserID','nodeTime','partialParentID','rootUserID','rootTime','actionType']
 
     if len(followers) != 0:
-        print('running parent reconstruction...')
         #get parent IDs for retweets and quotes
         pia = ParentIDApproximation(followers, data[cols],rootID_col_name='partialParentID')
         parent_ids = pia.get_approximate_parentids()
     
         data['parentID'] = data['nodeID'].map(dict(zip(parent_ids.nodeID,parent_ids.parentID)))
     else:
-        print('not running parent reconstruction...')
         data.loc[data['parentID'] == '?','parentID'] = data.loc[data['parentID'] == '?','partialParentID'].copy()
         
     data = data[~data['actionType'].isin(['reply','tweet'])]
@@ -210,7 +229,7 @@ def full_reconstruction(data,followers=defaultdict(lambda: set([]))):
     data = data.drop(['rootUserID','rootTime'],axis=1)
 
     #follow cascade chain to get root node for reply tweets
-    data = get_reply_cascade_root_tweet(data)
+    data = get_reply_cascade_root_tweet(data, parent_node_col='reply_parent')
 
     return(data)
 
