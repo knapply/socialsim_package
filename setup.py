@@ -35,7 +35,7 @@ package_data = {
 
 setup(
     name='socialsim',
-    version='0.4.0',
+    version='0.4.1',
     requirements=package_requirements, 
     packages=package_structure,
     package_data=package_data,

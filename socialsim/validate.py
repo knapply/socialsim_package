@@ -8,7 +8,6 @@ VALID_OPTIONS = {'cp5': {'simulation_periods': {"june30-july27",
                                                 "july14-august10", 
                                                 "july21-august17",
                                                 "july28-august24", 
-                                                "march15-march28",
                                                 "august4-august31"},
                          
                          'simulation_windows': {"june30-july27": ['06-30', '07-27'],
@@ -136,7 +135,7 @@ def check_records(submission_filepath, nodelist, simulation_period, challenge):
                 warnings.append('Node list passed to valdiate against is empty so validation did not check for missing/extra informationIDs.')
 
         # test that there are no NaN items in required event details
-        for c in ['informationID', 'nodeTime', 'nodeID', 'parentID', 'rootID', 'platform', 'actionType', 'nodeUserID']:
+        for c in ['informationID', 'nodeTime', 'nodeID', 'parentID', 'rootID', 'platform', 'actionType', 'nodeUserID', 'parentUserID', 'rootUserID']:
             if len(subm[c]) != len(subm[c].dropna()):
                 errors.append(f'{c} can not be NaN values.')
                 print(c)

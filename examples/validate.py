@@ -4,7 +4,7 @@ import argparse
 if __name__ == '__main__':
     # parse command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str, help='challenge', default='cp4', required=False)
+    parser.add_argument('-c', type=str, help='challenge', default='cp5', required=False)
     parser.add_argument('-s', type=str, help='submission filepath', required=True)
     parser.add_argument('-n', type=str, help='nodelist filepath', default=None, required=False)
     args = parser.parse_args()
