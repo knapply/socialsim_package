@@ -172,7 +172,7 @@ def sample_from_historical_data(grp, info, plat, min_time, max_time, start_time,
     #remove fake events
     grp = grp[grp['nodeID'] != '-']
     #sample random events from the historical data
-    sampled_df = grp.sample(len(delta_times),replace=True).reset_index(drop=True)
+    sampled_df = grp.sample(len(delta_times)*2,replace=True).reset_index(drop=True)
         
     #if duplicate events have been sampled, rename their ID fields
     sampled_df['counter'] = (sampled_df.groupby(['nodeID','parentID']).cumcount()+1).astype(str)
@@ -183,9 +183,10 @@ def sample_from_historical_data(grp, info, plat, min_time, max_time, start_time,
     #if parents occur after children, swap them
     sampled_df = fix_parent_relationships(sampled_df)
     
-    
+    times = times.append(times)
+        
     times.reset_index(drop=True, inplace=True)
-
+    
     sampled_df['nodeTime'] = times
         
     sampled_df['nodeTime'] = pd.to_datetime(sampled_df['nodeTime'])
@@ -199,16 +200,17 @@ def sample_from_historical_data(grp, info, plat, min_time, max_time, start_time,
     
     sampled_df['nodeTime'] = pd.to_datetime(sampled_df['nodeTime'])
     sampled_df = sampled_df.sort_values('nodeTime')
-
+    
     return(sampled_df)
 
 def main():
 
     path = './'
-    n_runs = 1
-    simulation_periods = [['2020-06-01','2020-06-28']] #4 week period example
+    n_runs = 10
+    #End date of simulation_period in simulation_periods is not inclusive. 
+    simulation_periods = [['2020-06-30','2020-07-28']] #4 week period example
 
-    #files are in weekly subsets, e.g. venezuela_v2_extracted_twitter_2019-02-01_2019-02-08.json
+    #Ground Truth files must be in weekly subsets. Date and platform must be included in file name: {}_twitter_2020-06-30_2020-07-28.json
     all_files = glob.glob(path + '*.json')
     print(all_files)
 
@@ -258,9 +260,6 @@ def main():
         hist = pd.concat(hist)
 
         hist = hist.sort_values('nodeTime')
-        
-        #Get parentUserID here. When working with CP4 data, add parentUserID column.
-        #hist['parentUserID'] = [str(uuid.uuid4()) for i in range(len(hist))] and ,'parentUserID'
         hist = hist[['informationID','nodeTime','nodeID','parentID','rootID','platform','actionType','nodeUserID','parentUserID']]
 
         #For extracted ground truth files containing all narratives outside of the 18 core
@@ -300,7 +299,8 @@ def main():
                 starting = time.time()
                 sampled_df = sample_from_historical_data(grp, info, plat,
                                                          hist['nodeTime'].min(), hist['nodeTime'].max(),
-                                                         start,end + datetime.timedelta(days=1),
+                                                         start,
+                                                         end,
                                                          previous_hist = previous_hist,
                                                          new_users=True)
                 ending = time.time()
@@ -313,17 +313,19 @@ def main():
             
             #save generated baseline
             start_str = start.strftime('%Y-%m-%d')
-            end_str = end.strftime('%Y-%m-%d')
+            end_str = (end - datetime.timedelta(hours = 24)).strftime('%Y-%m-%d')
 
-            baseline.to_json(f'/u00/SocialSim/home/millersa4/baseline/baseline_{start_str}_{end_str}_{i}.json',orient='records',lines=True)
+            baseline = baseline[~baseline['parentID'].isnull()]
+            save_path = './'
+            baseline.to_json(save_path + f'baseline_{start_str}_{end_str}_{i}.json',orient='records',lines=True)
             
             
             start_str_meta = start.strftime('%B%d').lower()
-            end_str_meta = end.strftime('%B%d').lower()
+            end_str_meta = (end - datetime.timedelta(hours = 24)).strftime('%B%d').lower()
 
-            submission_meta = '{"team": "leidos", "model_identifier": "event_sampled_baseline", "simulation_period": ' + f'"{start_str_meta}-{end_str_meta}"' + '}\n'
+            submission_meta = '{"team": "leidos", "model_identifier": "event_sampled_baseline_24mag2", "simulation_period": ' + f'"{start_str_meta}-{end_str_meta}"' + '}\n'
 
-            with open(f'/u00/SocialSim/home/millersa4/baseline/baseline_{start_str}_{end_str}_{i}.json', 'r+') as fp:
+            with open(save_path + f'baseline_{start_str}_{end_str}_{i}.json', 'r+') as fp:
                 lines = fp.readlines()     # lines is list of line, each element '...\n'
                 lines.insert(0, submission_meta)  # you can use any index if you know the line index
                 fp.seek(0)                 # file pointer locates at the beginning to write the whole file again

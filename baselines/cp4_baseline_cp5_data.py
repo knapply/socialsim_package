@@ -173,9 +173,10 @@ def main():
 
     path = './'
     n_runs = 1
-    simulation_periods = [['2020-06-01','2020-06-28']] #example of 4 week time frame
+    #End date of simulation_period in simulation_periods is not inclusive. 
+    simulation_periods = [['2020-06-30','2020-07-28']] #4 week period example
 
-    #files are in weekly subsets, e.g. venezuela_v2_extracted_twitter_2019-02-01_2019-02-08.json
+    #Ground Truth files must be in weekly subsets. Date and platform must be included in file name: {}_twitter_2020-06-30_2020-07-28.json
     all_files = glob.glob(path + '*.json')
 
     #extract dates and platforms from file names
@@ -259,7 +260,7 @@ def main():
                 starting = time.time()
                 sampled_df = sample_from_historical_data(grp, info, plat,
                                                          hist['nodeTime'].min(), hist['nodeTime'].max(),
-                                                         start, end+ datetime.timedelta(days=1),
+                                                         start, end,
                                                          previous_hist = previous_hist,
                                                          new_users=True)
                 ending = time.time()
@@ -269,20 +270,19 @@ def main():
                 dfs.append(sampled_df)
 
             baseline = pd.concat(dfs).reset_index(drop=True)
-            #baseline['nodeTime'] = baseline['nodeTime'].dt.strftime('%Y-%m-%d %H:%M:%S'))
+            #baseline['nodeTime'] = baseline['nodeTime'].dt.strftime('%Y-%m-%d %H:%M:%S')
             #save generated baseline
             start_str = start.strftime('%Y-%m-%d')
-            end_str = end.strftime('%Y-%m-%d')
-            path = './'
-            baseline.to_json(path + f'baseline_{start_str}_{end_str}_{i}_cp4_bl_cp5_data_try.json',orient='records',lines=True)
-            
+            end_str = (end - datetime.timedelta(hours = 24)).strftime('%Y-%m-%d')
+            save_path = './'
+            baseline.to_json(save_path + f'baseline_{start_str}_{end_str}_{i}_cp4.json',orient='records',lines=True)
             
             start_str_meta = start.strftime('%B%d').lower()
-            end_str_meta = end.strftime('%B%d').lower()
+            end_str_meta = (end - datetime.timedelta(hours = 24)).strftime('%B%d').lower()
             
             submission_meta = '{"team": "pnnl", "model_identifier": "event_sampled_baseline",                                "simulation_period": ' + f'"{start_str_meta}-{end_str_meta}"' + '}\n'
             
-            with open(path + f'baseline_{start_str}_{end_str}_{i}_cp4_bl_cp5_data_try.json', 'r+') as fp:
+            with open(save_path + f'baseline_{start_str}_{end_str}_{i}_cp4.json', 'r+') as fp:
                 lines = fp.readlines()     # lines is list of line, each element '...\n'
                 lines.insert(0, submission_meta)  # you can use any index if you know the line index
                 fp.seek(0)                 # file pointer locates at the beginning to write the whole file again
