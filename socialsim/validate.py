@@ -149,8 +149,8 @@ def check_records(submission_filepath, nodelist, simulation_period, challenge):
         # check that nodeTimes fall within simulation window
         try:
             simulation_window = VALID_OPTIONS[challenge]['simulation_windows'][simulation_period]
-            minday = f'2019-{simulation_window[0]}'
-            maxday = f'2019-{simulation_window[1]} 23:59:59'
+            minday = f'2020-{simulation_window[0]}'
+            maxday = f'2020-{simulation_window[1]} 23:59:59'
             maxday_str = maxday.split(' ')[0]
             subm['nodeTime'] = pd.to_datetime(subm['nodeTime']).astype(str)
             subm_minday, subm_maxday = subm['nodeTime'].min(), subm['nodeTime'].max()
