@@ -26,3 +26,5 @@ from .utils import subset_for_test
 from .utils import add_communities_to_dataset
 
 from .validate  import validation_report
+
+from .metrics_cp6  import calc_cp6_scalar_metrics
