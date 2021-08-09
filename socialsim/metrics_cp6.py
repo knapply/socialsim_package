@@ -17,7 +17,7 @@ def APE(ground_truth: np.array, simulated: np.array) -> np.array:
     """
     Absolute Percentage Error
     """
-    return AE(ground_truth, simulated) / np.abs(ground_truth)
+    return AE(ground_truth, simulated) / np.abs(ground_truth) * 100.0
 
 
 def MAPE(ground_truth: np.array, simulated: np.array) -> float:
